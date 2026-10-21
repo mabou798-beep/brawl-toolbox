@@ -1,96 +1,134 @@
-# Publishing Brawl Toolbox to the App Store
+# Brawl Toolbox — publishing status
 
-This project was built and tested on Windows (Chrome for UI testing, an Android
-emulator for the AdMob integration). iOS can only be compiled on a Mac with
-Xcode, so the steps below pick up from there. The iOS-side AdMob native ad
-code has **never been compiled** — this is the first thing that will actually
-build it.
+Last updated: 21 October 2026, 02:30 (Africa/Casablanca)
 
-## 1. Prerequisites on the Mac
+This file replaces the earlier Mac/Xcode-centred version, which was written
+before the Codemagic route was chosen and is no longer accurate.
 
-- Xcode (latest stable from the App Store)
-- Flutter SDK installed (`flutter doctor` should show no blockers for iOS)
-- An active **Apple Developer Program** membership ($99/year) — required to
-  submit to the App Store, and to get real device signing working
-- CocoaPods is **not** needed — this Flutter version resolves iOS packages via
-  Swift Package Manager automatically
+---
 
-## 2. First build
+## Where we stopped
 
-```
-cd BrawlToolbox-iOS-project
-flutter pub get
-open ios/Runner.xcworkspace
-```
+Everything up to **starting the first Codemagic build** is done. The next
+action is step 4 below.
 
-Always open the **`.xcworkspace`**, not `.xcodeproj`.
+## Key values (keep these together)
 
-In Xcode:
-1. Select the `Runner` target → **Signing & Capabilities**
-2. Choose your Apple Developer **Team** and let Xcode auto-manage signing
-3. Confirm the **Bundle Identifier** (`com.brawlfan.brawlFanApp`). Change it
-   now if you'd rather use your own — it's much harder to change after you've
-   registered it in App Store Connect
-4. Build once for a simulator (`Cmd+R`) to confirm everything compiles,
-   including the native ad factory in `AppDelegate.swift`
+| | |
+|---|---|
+| App name (App Store) | `Brawl Toolbox for Brawl Stars` |
+| Home-screen name | `Brawl Toolbox` |
+| Bundle ID | `com.brawlfan.brawlFanApp` |
+| Apple ID (App Store Connect) | `6825153847` |
+| SKU | `brawltoolbox` |
+| Apple Team ID | `K4PS39S352` |
+| GitHub repo | `https://github.com/mabou798-beep/brawl-toolbox` (public) |
+| Privacy Policy URL | `https://mabou798-beep.github.io/brawl-toolbox/privacy.html` |
+| Support URL | `https://mabou798-beep.github.io/brawl-toolbox/` |
+| Codemagic API key name | `Codemagic` (the one already used for TCG Companion) |
+| Backend | Cloudflare Worker `brawl-toolbox-api.terravisioncontractors.workers.dev` |
 
-## 3. If the native ad code doesn't compile
+---
 
-`ListTileNativeAdFactory` in `ios/Runner/AppDelegate.swift` was written against
-the documented `FLTNativeAdFactory` API but never compiled (no Mac was
-available while building this). If Xcode reports type errors there, it's
-almost always the `GAD`-prefixed type names (`GADNativeAd`, `GADNativeAdView`,
-`GADMediaView`) — some SDK versions dropped that prefix. Try removing it if
-the current names don't resolve.
+## 1. Code — done
 
-If you'd rather not deal with it, you can delete the
-`registerNativeAdFactory(...)` call and the `ListTileNativeAdFactory` class —
-the in-feed native ad in the News screen will just quietly not appear
-(`NativeAdTile` already renders nothing if the ad fails to load), everything
-else is unaffected.
+- Live event rotation from Supercell's official API, via the Cloudflare Worker
+  (BrawlAPI's own `/events` endpoint returns an empty list, which is why the
+  Worker exists at all).
+- Player stats: profile, top brawlers, last battles, pull to refresh.
+- Brawlers, maps, brawler detail, quiz (silhouettes fixed — they are drawn
+  from the full-body model render, the only CDN image with a transparent
+  background).
+- Fake Shop and mock News are unreachable from the UI. **Their files still
+  exist** (`lib/screens/shop/`, `lib/screens/news/`, `lib/data/mock_news.dart`,
+  `lib/models/shop_offer.dart`, `lib/models/news_post.dart`) — nothing imports
+  them, so they are not compiled in. Deleting them is housekeeping, but never
+  wire them back up: fabricated shop and news data is a Guideline 4.1 risk.
+- Supercell's required disclaimer is on the More tab, in the exact wording the
+  Fan Content Policy asks for, with a link to the policy.
+- `flutter analyze` → **No issues found!**
 
-## 4. Known ad-integration status (tested on Android; see the conversation this
-came from for details)
+## 2. iOS configuration — done, and why
 
-- ✅ Banner ad — confirmed working live
-- ✅ Interstitial ad — confirmed working live (fires after a quiz round, and
-  every 3rd wallpaper opened)
-- ✅ App Open ad — code correct, preloads without errors
-- ⚠️ Native ad (in-feed, News screen) — failed to load in one Android emulator
-  test with a server-reported error, most likely tied to that emulator's
-  outdated Google Play Services rather than an app bug (three real bugs along
-  the way — missing `MediaView`, missing `mediaContent`, undersized media —
-  were found and fixed). **Verify this specifically on a real device before
-  relying on it**; the Dart layer already fails gracefully if it doesn't load.
+Each of these was a problem that cost a build or a rejection on the first app
+(TCG Companion). They are all pre-empted here.
 
-All ad unit IDs automatically use Google's official test IDs in debug builds
-and only switch to the real production IDs in a genuine `--release` build
-(see `lib/core/ads/ad_ids.dart`). This protects the AdMob account from being
-flagged for invalid traffic during testing — don't hardcode the real IDs
-elsewhere.
+| Setting | Value | Reason |
+|---|---|---|
+| `AppDelegate.swift` native ad factory | `NativeAd` / `NativeAdView` / `MediaView` | GMA iOS SDK 12.0.0 dropped the `GAD` prefix in Swift; google_mobile_ads 9.0.0 pulls SDK 13.3.0 |
+| `IPHONEOS_DEPLOYMENT_TARGET` | `15.5` | TCG Companion needed exactly this on the same toolchain |
+| `SKAdNetworkItems` | 55 networks | Without it iOS 14+ ad attribution fails and iOS revenue drops |
+| `ITSAppUsesNonExemptEncryption` | `false` | Without it every TestFlight build stalls on "Missing Compliance" |
+| `.gitattributes` | `* text=auto` | Windows CRLF breaking scripts on the macOS builder |
+| App Tracking Transparency | requested 600 ms after first frame | Apple only shows the prompt while the app is on screen and active; requesting it in `main()` means it never appears |
 
-## 5. Before submitting: things only you can decide/do
+Build settings are now identical to TCG Companion's in every respect except
+the bundle identifier.
 
-- **Privacy Policy URL** — required by App Store Connect for any app using
-  ads/analytics. You'll need to host one (a simple static page is enough) that
-  discloses AdMob's data collection.
-- **App Privacy questionnaire** (App Store Connect → App Privacy) — declare
-  the data AdMob collects (device identifiers, usage/diagnostics data). Google
-  publishes exact wording for this in their AdMob docs.
-- **Trademark/IP risk** — this is an unofficial fan app using "Brawl" in the
-  name and Brawl Stars-adjacent branding/artwork sourced from a community API
-  (not Supercell). Apple review or Supercell could object. Nothing here
-  changes that risk calculus — it's worth a final look before you submit.
-- **App Store Connect listing** — register the app (My Apps → New App),
-  matching the bundle identifier from step 2, write the description, and
-  prepare screenshots (Xcode Simulator → Cmd+S captures correctly-sized ones).
+## 3. App Store Connect — done
 
-## 6. Archive & upload
+App record created, category **Reference** (deliberately not Games), privacy
+policy URL set.
 
-```
-flutter build ipa
-```
+---
 
-Then open `build/ios/archive/Runner.xcarchive` in Xcode Organizer (or drag the
-generated `.ipa` into the **Transporter** app) → **Distribute App** →
-**App Store Connect**.
+## 4. NEXT: first Codemagic build
+
+1. codemagic.io → **Add application** → **GitHub** → grant access to
+   `brawl-toolbox` → **Flutter App** → **codemagic.yaml**
+2. Check **Teams → Integrations → Developer Portal** lists a key named exactly
+   `Codemagic`
+3. **Start new build** → branch `main` → workflow `ios-release`
+
+`codemagic.yaml` is a copy of the workflow that already ships TCG Companion,
+so the three failed `Update codemagic.yaml` commits from that app should not
+repeat. It builds and uploads to TestFlight; it does **not** submit for
+review.
+
+## 5. After the build reaches TestFlight
+
+Install on a real iPhone and check the four things that have never run on a
+device:
+
+- [ ] ATT prompt appears about a second after launch
+- [ ] Banner ad shows above the tab bar
+- [ ] **Native ad inside the Brawlers list** — the least certain of the four
+- [ ] Player tag survives a full app restart (the web build cannot persist it;
+      that is a web-platform quirk, not an app bug)
+
+## 6. Then, before submitting
+
+- [ ] App Privacy questionnaire — AdMob collects device identifiers and usage
+      data **used for tracking**; the player tag is user content sent to
+      Supercell. Do this one carefully, with the privacy policy open beside it.
+- [ ] Content Rights: the app does contain third-party content, and you do
+      hold the rights, through Supercell's Fan Content Policy. This is the
+      question that had no good answer on the Pokémon app.
+- [ ] Screenshots (iPhone 6.9" and 6.5" are the required sizes)
+- [ ] Description — must contain the word **Unofficial** and Supercell's
+      disclaimer sentence
+- [ ] Decide iPhone-only vs iPhone+iPad. TCG Companion ended up iPhone-only,
+      and that was done in App Store Connect, not in the Xcode project.
+      iPad support means iPad screenshots and an iPad-worthy layout.
+
+### Suggested store metadata
+
+- **Subtitle** (30 max): `Unofficial stats, maps, events`
+- **Keywords** (100 max, no spaces after commas):
+  `brawl,stars,companion,stats,tracker,brawler,maps,events,rotation,quiz,guide,tier,unofficial`
+
+---
+
+## Standing constraints
+
+- **The app icon must not contain** the star-skull emblem, the Brawl Stars
+  logotype, or any Supercell character. Game artwork inside the app is
+  permitted by the Fan Content Policy; the icon is the app's own identity, and
+  putting their mark there is what Guideline 4.1 Copycats is about. Three
+  candidate icons were rejected on this basis before the current one.
+- The Supercell API token lives only in the Cloudflare Worker. It is not in
+  this repository, and it must not be.
+- Ad placement, as decided: anchored banner always; interstitial only at the
+  end of a quiz round (3-minute cooldown, max 3 per session); App Open on
+  every return to the foreground after the cold start; native tiles labelled
+  "Sponsored".
