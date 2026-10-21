@@ -25,7 +25,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-5482329013197519~7858236887</string>
+	<string>ca-app-pub-5383120911029833~7930514722</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Allowing this lets us show ads that match your interests instead of random ones. Ads are what keep Brawl Toolbox free, and saying no costs you no features.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
