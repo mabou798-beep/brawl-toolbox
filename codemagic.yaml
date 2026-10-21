@@ -1,0 +1,55 @@
+workflows:
+  ios-release:
+    name: Brawl Toolbox iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    # Same App Store Connect API key already set up for the TCG app, under
+    # Codemagic → Account settings → Integrations. Reusing it means no new
+    # .p8 to generate, and one less thing that can be misnamed.
+    integrations:
+      app_store_connect: Codemagic
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.brawlfan.brawlFanApp
+
+    scripts:
+      # Order matters: signing is set up on the Xcode project before anything
+      # reads it, exactly as in the workflow that already ships the TCG app.
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        # No Podfile today (this project resolves iOS packages through Swift
+        # Package Manager), so this is a no-op kept for the day one appears.
+        script: find . -name "Podfile" -execdir pod install \;
+
+      - name: Build IPA
+        script: |
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number=$PROJECT_BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      email:
+        recipients:
+          - terravisioncontractors@gmail.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
